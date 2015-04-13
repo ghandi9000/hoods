@@ -6,10 +6,12 @@
 ## Last-Updated: Mon Apr 13 00:14:58 2015 (-0400)
 ##           By: Noah Peart
 ######################################################################
-source("~/work/ecodatascripts/vars/heights/canopy/load_canopy.R")
+## source("~/work/ecodatascripts/vars/heights/canopy/load_canopy.R")
 require(plyr)
 require(dplyr)
 require(ggplot2)
+
+if (!file.exists("temp/")) dir.create("temp")  # store neighbor matrices
 
 ## Data with estimated heights/boles
 pp <- read.csv("~/work/temp/pp.csv")
@@ -64,7 +66,7 @@ tPars <- quote(!is.na(ba) &
 nPars <- quote(!is.na(neighbor[["ba"]]))
 ##               neighbor[["ba"]] >= target[["ba"]])
 
-nCols <- c("ba", "id", "bqudx", "bqudy", "spec")
+nCols <- c("ba", "id", "bqudx", "bqudy", "spec", "elevcl", "aspcl")
 
 dPars <- quote(!is.na(ba) &
                stat == "ALIVE" &
@@ -75,11 +77,15 @@ dPars <- quote(!is.na(ba) &
                bqudy < 11 &
                bqudy > 0 &
                pplot > 3)
-## nRad <- 2
 
-## nLst <- mnm(tPars = tPars, nPars = nPars, dPars = dPars, nCols = nCols,
-##            nRad = nRad, dat = matDat, parallel=F)
-## nMat <- mnm_to_matrix(nLst)
+for (i in 1:3) {
+  if (!file.exists(paste0("temp/nm", i, ".rds"))) {
+    nLst <- mnm(tPars = tPars, nPars = nPars, dPars = dPars, nCols = nCols,
+                nRad = i, dat = matDat, parallel=F)
+    nm <- mnm_to_matrix(nLst)
+    saveRDS(nm, paste0("temp/nm", i, ".rds"))
+  }
+}
 
 ################################################################################
 ##

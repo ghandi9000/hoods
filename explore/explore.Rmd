@@ -7,13 +7,13 @@ output:
         toc: true
         toc_depth: 3
         theme: spacelab
-        highlight: zenbur
+        highlight: zenburn
         number_sections: false
 ---
 
 ```{r global_opts, include=FALSE}
 knitr::opts_chunk$set(fig.path='./Figs', echo=FALSE, warning=FALSE, message=FALSE,
-                      cache=TRUE, dev='svg')
+                    dev='svg')
 ```
 -------------------
 
@@ -49,6 +49,21 @@ require(xtable)
 source("setup.R")
 source("hood_functions.R")
 
+## Total target sample size
+nbrs <- pp %>% group_by(YEAR, PPLOT) %>%
+  filter(STAT == "ALIVE",
+         !is.na(BQUDX), BQUDX > 0, BQUDX < 11,
+         !is.na(BQUDY), BQUDY > 0, BQUDY < 11,
+         !is.na(DBH))
+# 
+# sampleSize <- nbrs %>%
+#   summarise(Total = n())
+
+renderText({ "Total Sample Sizes by Plot/Year:"})
+renderTable({
+  sampleTable <- table(nbrs$YEAR, nbrs$PPLOT)
+  addmargins(sampleTable) #, caption = "Total sample sizes")
+})
 ```
 
 ```{r shiny_vars, cache=FALSE}
@@ -61,9 +76,14 @@ selectInput("nRad", "Choose Neighbor Radius:",
 nRad <- reactive(as.numeric(input$nRad))  # get neighbor radius from input
 nMat <- reactive({
     rad <- nRad()
-    nLst <- mnm(tPars = tPars, nPars = nPars, dPars = dPars, nCols = nCols,
-                nRad = rad, dat = matDat, parallel=F)
-    nMat <- mnm_to_matrix(nLst)
+    if (file.exists(paste0("temp/nm", rad, ".rds"))) readRDS(paste0("temp/nm", rad, ".rds"))
+    else {
+      nLst <- mnm(tPars = tPars, nPars = nPars, dPars = dPars, nCols = nCols,
+                  nRad = rad, dat = matDat, parallel=F)
+      nmat <- mnm_to_matrix(nLst)
+      saveRDS(paste0("temp/nm", rad, ".rds"))
+      nmat
+      }
 })
 
 renderText({
@@ -71,26 +91,32 @@ renderText({
 })
 
 renderTable({
-    nmat <- nMat()  # make neighbor matrices
-    
-    nbrs <- pp %>% group_by(YEAR, PPLOT) %>%
-        filter(STAT == "ALIVE",
-               !is.na(BQUDX), BQUDX > 0, BQUDX < 11,
-               !is.na(BQUDY), BQUDY > 0, BQUDY < 11,
-               !is.na(DBH))
-
-    sampleSize <- nbrs %>%
-        summarise(Total = n())
-    targetCount <- nmat$targets %>% group_by(time, pplot) %>%
-        summarise(Targets = n())
-
-    sampleTable <- table(nbrs$YEAR, nbrs$PPLOT)
+    nmat <- nMat()  # make neighbor matrices  
     targetTable <- table(nmat$targets$time, nmat$targets$pplot)
-
-
-    addmargins(sampleTable) #, caption = "Total sample sizes")
     addmargins(targetTable) #, caption = "Target sample sizes")
-    
+})
+
+## Neighbor counts
+selectInput("splitBy", "Split counts by:",
+            choices=c("Don't split", "Aspect", "Elevation"))
+splitBy <- reactive({
+  if (input$splitBy == "Aspect") "ASPCL"
+  else if (input$splitBy == "Elevation") "ELEVCL"
+  else FALSE
+})
+
+renderPlot({
+  sp <- splitBy()
+  r <- nRad()
+  nm <- nMat()
+  counts <- rowSums(!is.na(nm$ba))
+  if (sp != FALSE)
+    ggplot(data.frame(counts=counts, ELEVCL=nm$targets$elevcl, ASPCL=nm$targets$aspcl), aes(counts)) +
+    geom_histogram() + 
+    facet_wrap(as.formula(paste("~", sp))) +
+    ggtitle(paste0("Histograms of Neighbor Counts(radius=", r, ")"))
+  else
+    hist(counts, main=paste0("Histogram of Neighbor Counts (radius=", r, ")"))
 })
 
 renderPlot({

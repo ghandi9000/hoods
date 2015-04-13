@@ -28,4 +28,3 @@ findTargets <- function(plot, ndist, yr, dat) {
     samp[inds, ]
 }
 
-
