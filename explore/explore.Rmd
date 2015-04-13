@@ -1,0 +1,110 @@
+---
+title: "Neighborhood Exploratory Graphics"
+date: "Generated: `r Sys.Date()`"
+runtime: shiny
+output:
+    html_document:
+        toc: true
+        toc_depth: 3
+        theme: spacelab
+        highlight: zenbur
+        number_sections: false
+---
+
+```{r global_opts, include=FALSE}
+knitr::opts_chunk$set(fig.path='./Figs', echo=FALSE, warning=FALSE, message=FALSE,
+                      cache=TRUE, dev='svg')
+```
+-------------------
+
+# Info
+* [code](https://github.com/ghandi9000/hoods)
+* Basic neighbor relationship to target: BA / Distance, negative exponential decrease?
+* Ways to __quantify__ a neighborhood (possibly relative to target size where applicable):
+    + Sum total neighbor values (ie. BA/Distance)
+    + Max neighbor value
+    + Mean/median neighbor value
+    + Number of neighbors
+    + Avg. distance
+    + Avg. weighted distance (same as mean neighbor value maybe)
+    + Species proportions
+* Ways to __assess__ effects of neighborhood value on target:
+    + [DBH, Height, BV, BA] Growth
+    + Ratios [Height/BA, ...]
+    + Species
+    + Decline index
+
+---------------------
+
+# Setup 
+* Neighbor radii:
+    + `1` is just the quadrat containing target
+    + `2` is 3x3 (2 quadrats in all directions from target, including target's quadrat)
+    + `3` is 5x5
+
+```{r setup}
+
+require(xtable)
+
+source("setup.R")
+source("hood_functions.R")
+
+```
+
+```{r shiny_vars, cache=FALSE}
+require(magrittr)
+require(dplyr)
+require(ggplot2)
+
+selectInput("nRad", "Choose Neighbor Radius:",
+            choices=c(1, 2, 3))
+nRad <- reactive(as.numeric(input$nRad))  # get neighbor radius from input
+nMat <- reactive({
+    rad <- nRad()
+    nLst <- mnm(tPars = tPars, nPars = nPars, dPars = dPars, nCols = nCols,
+                nRad = rad, dat = matDat, parallel=F)
+    nMat <- mnm_to_matrix(nLst)
+})
+
+renderText({
+    paste("Target sample sizes with neighbor radius:", nRad())
+})
+
+renderTable({
+    nmat <- nMat()  # make neighbor matrices
+    
+    nbrs <- pp %>% group_by(YEAR, PPLOT) %>%
+        filter(STAT == "ALIVE",
+               !is.na(BQUDX), BQUDX > 0, BQUDX < 11,
+               !is.na(BQUDY), BQUDY > 0, BQUDY < 11,
+               !is.na(DBH))
+
+    sampleSize <- nbrs %>%
+        summarise(Total = n())
+    targetCount <- nmat$targets %>% group_by(time, pplot) %>%
+        summarise(Targets = n())
+
+    sampleTable <- table(nbrs$YEAR, nbrs$PPLOT)
+    targetTable <- table(nmat$targets$time, nmat$targets$pplot)
+
+
+    addmargins(sampleTable) #, caption = "Total sample sizes")
+    addmargins(targetTable) #, caption = "Target sample sizes")
+    
+})
+
+renderPlot({
+    nmat <- nMat()
+    ggplot(nmat$targets, aes(ba)) + geom_histogram()
+})
+
+```
+
+
+---------------------
+
+# Permanent Plots
+
+---------------------
+
+# Transect Plots
