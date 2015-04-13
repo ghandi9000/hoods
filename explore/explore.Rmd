@@ -78,12 +78,12 @@ nMat <- reactive({
     rad <- nRad()
     if (file.exists(paste0("temp/nm", rad, ".rds"))) readRDS(paste0("temp/nm", rad, ".rds"))
     else {
-      nLst <- mnm(tPars = tPars, nPars = nPars, dPars = dPars, nCols = nCols,
-                  nRad = rad, dat = matDat, parallel=F)
-      nmat <- mnm_to_matrix(nLst)
-      saveRDS(paste0("temp/nm", rad, ".rds"))
-      nmat
-      }
+        nLst <- mnm(tPars = tPars, nPars = nPars, dPars = dPars, nCols = nCols,
+                    nRad = rad, dat = matDat, parallel=F)
+        nmat <- mnm_to_matrix(nLst)
+        saveRDS(paste0("temp/nm", rad, ".rds"))
+        nmat
+    }
 })
 
 renderText({
@@ -98,20 +98,22 @@ renderTable({
 
 ## Neighbor counts
 selectInput("splitBy", "Split counts by:",
-            choices=c("Don't split", "Aspect", "Elevation"))
+            choices=c("Don't split", "Aspect", "Elevation", "Plot"))
 splitBy <- reactive({
-  if (input$splitBy == "Aspect") "ASPCL"
-  else if (input$splitBy == "Elevation") "ELEVCL"
+  if (input$splitBy == "Aspect") "aspcl"
+  else if (input$splitBy == "Elevation") "elevcl"
+  else if (input$splitBy == "Plot") "pplot"
   else FALSE
 })
 
+nCounts <- reactive({ nm <- nMat(); rowSums(!is.na(nm$ba) )})
 renderPlot({
   sp <- splitBy()
   r <- nRad()
   nm <- nMat()
-  counts <- rowSums(!is.na(nm$ba))
+  counts <- nCounts()
   if (sp != FALSE)
-    ggplot(data.frame(counts=counts, ELEVCL=nm$targets$elevcl, ASPCL=nm$targets$aspcl), aes(counts)) +
+    ggplot(cbind(counts=counts, nm$targets), aes(counts)) +
     geom_histogram() + 
     facet_wrap(as.formula(paste("~", sp))) +
     ggtitle(paste0("Histograms of Neighbor Counts(radius=", r, ")"))
@@ -119,10 +121,123 @@ renderPlot({
     hist(counts, main=paste0("Histogram of Neighbor Counts (radius=", r, ")"))
 })
 
-renderPlot({
-    nmat <- nMat()
-    ggplot(nmat$targets, aes(ba)) + geom_histogram()
-})
+# renderPlot({
+#     nmat <- nMat()
+#     ggplot(nmat$targets, aes(ba)) + geom_histogram()
+# })
+
+```
+
+# Plot-Level Distributions
+Look more closely at specific plots and the distributions of targets/neighbors.
+```{r plot_distributions, cache=FALSE}
+
+sidebarLayout(
+  
+  sidebarPanel(
+    helpText("Choose individual plot for closer inspection."),
+    selectInput("plot", "Choose Plot:", choices=unique(pp$PPLOT)),
+    br(),
+    selectInput("type", "Plot Type:", choices=c("Histogram", "Position", "Density", "Scatter")),
+    conditionalPanel(
+      condition = "input.type == 'Scatter'",
+      selectInput("yVar", "Y", choices=c("HT", "HTOBS", "DBH", "BV", "BA")),
+      selectInput("xVar", "X", choices=c("DBH", "BV", "BA", "HT", "HTOBS")),
+      checkboxInput("smoother", "Add smoothed spline"),
+      conditionalPanel(
+        condition = "input.smoother == true",
+        selectInput("smoothMethod", "Method",
+              list("loess", "lm", "glm", "gam", "rlm"))
+        )
+      ),
+    conditionalPanel(
+      condition = "input.type == 'Position'",
+      checkboxInput("colorTargets", "Color Targets")
+      ),
+    checkboxInput("chooseSpec", "Choose Species"),
+    conditionalPanel(
+      condition = "input.chooseSpec == true",
+      checkboxGroupInput("spec", "Species:", choices=c(levels(pp$SPEC)), selected=c("ABBA"))
+      ),
+    br(),
+    checkboxInput("targets", "Just Targets")
+    ),
+      
+  mainPanel(  
+    renderPlot({
+      plot <- as.numeric(input$plot)
+      r <- nRad()
+      nm <- nMat()
+      species <- levels(pp$SPEC)
+      if (input$chooseSpec)
+        species <- input$spec
+      nmInds <- nm$targets$pplot == plot & nm$targets$spec %in% species
+      ppInds <- pp$PPLOT == plot & pp$STAT == "ALIVE" & pp$SPEC %in% species
+      if (input$targets) 
+        ppInds <- ppInds & pp$id %in% nm$targets[nmInds, "id"]
+      
+      if (input$type == "Histogram") {
+        counts <- rowSums(!is.na(nm$ba[nmInds,]))
+        p1 <- ggplot(cbind(counts=counts, nm$targets[nmInds,]), aes(counts)) +
+          geom_histogram() + facet_wrap(~time) +
+          ggtitle(paste0("Histograms of Neighbor Counts(radius=", r, "), Plot=", plot))
+        print(p1)
+      }
+      else if (input$type == "Density") {
+        specs <- pp[ppInds,] %>% group_by(SPEC, YEAR) %>% filter(n() > 2)
+        ggplot(specs, aes(BQUDX, BQUDY, size=BA, color=SPEC)) + 
+          geom_density2d() + facet_wrap(~YEAR) +
+          ggtitle("Species Densities (removed species with counts <= 2)")
+      }
+      else if (input$type == "Position") {
+        p1 <- ggplot(pp[ppInds,], aes(BQUDX, BQUDY, size=BA, color=SPEC)) + geom_point(alpha=0.5) +
+          facet_wrap(~YEAR) + xlim(0.8, 10.2) + ylim(0.8, 10.2) + geom_hline(yintercept=c(1, 10)) +
+          geom_vline(xintercept=c(1, 10))
+        if (input$colorTargets) {
+          inds <- pp$PPLOT == plot & pp$STAT == "ALIVE" & pp$id %in% nm$targets[nmInds, "id"]
+          p1 <- p1 + geom_point(data=pp[inds,], aes(BQUDX, BQUDY), color="red")
+          }
+        print(p1)
+      }
+      else if (input$type == "Scatter") {
+        p1 <- ggplot(pp[ppInds,], aes_string(input$xVar, input$yVar, color="YEAR")) + 
+          geom_point(alpha=0.5) +
+          ggtitle(paste(input$yVar,"vs", input$xVar, "Plot=", plot))
+        if (input$smoother)
+          p1 <- p1 + geom_smooth(fill=NA, method=input$smoothMethod)
+        print(p1)
+        }
+      })
+    
+    )
+)
+
+```
+
+
+---------------------
+
+# Neighborhoods and Growth
+Examine various ways of estimating neighborhood values and look, visually, at the effect on growth.
+
+```{r hoods_growth, cache=FALSE}
+
+sidebarLayout(
+  
+  sidebarPanel(
+    helpText("Choose individual plot for closer inspection."),
+    selectInput("plot2", "Choose Plot:", choices=unique(pp$PPLOT)),
+    br()
+    ),
+  
+  mainPanel(
+    renderPlot({
+      plot <- as.numeric(input$plot2)
+      ggplot(pp[pp$PPLOT == plot,], aes(DBH, HT, color=YEAR)) + geom_point(alpha=0.5)
+      })
+    )
+  )
+
 
 ```
 
