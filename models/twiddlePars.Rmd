@@ -1,0 +1,50 @@
+---
+title: "Twiddle model parameters"
+date: "Generated: `r Sys.Date()`"
+runtime: shiny
+output:
+    html_document:
+        mathjax: "http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"
+        toc: true
+        toc_depth: 3
+        theme: spacelab
+        highlight: zenburn
+        number_sections: false
+---
+
+```{r global_opts, include=FALSE}
+
+knitr::opts_chunk$set(fig.path="./Figs", echo=FALSE, warning=FALSE,
+                      message=FALSE, dev='svg')
+
+```
+
+# Info
+* [code](https://github.com/ghandi9000/hoods)
+* Models:
+    + Logistic NCI
+
+# Setup
+Model/neighborhood config
+* Neighbor radii:
+    + `1` is just the quadrat containing target
+    + `2` is 3x3 (2 quadrats in all directions from target, including target's quadrat)
+    + `3` is 5x5
+    
+```{r setup}
+
+require(xtable)
+source("setup.R")
+source("hood_functions.R")
+
+```
+
+# Logistic NCI
+
+```{r log-nci, results='markup'}
+source("log-nci.R")
+renderText({  
+  printModel("ba")
+})
+
+```
