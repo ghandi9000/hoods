@@ -3,15 +3,20 @@
 ## Description: Remake datasets for analysis
 ## Author: Noah Peart
 ## Created: Mon Apr 13 20:07:47 2015 (-0400)
-## Last-Updated: Mon Apr 13 20:10:16 2015 (-0400)
+## Last-Updated: Tue Apr 14 12:47:04 2015 (-0400)
 ##           By: Noah Peart
 ######################################################################
 require(plyr)
 require(dplyr)
 
 ## Data with estimated heights/boles
-pp <- read.csv("~/work/temp/pp.csv")
-tp <- read.csv("~/work/temp/transect.csv")
+if (file.exists("temp/pp.csv") & file.exists("temp/transect.csv")) {
+    pp <- read.csv("temp/pp.csv")
+    tp <- read.csv("temp/transect.csv")
+} else {
+    pp <- read.csv("~/work/temp/pp.csv")
+    tp <- read.csv("~/work/temp/transect.csv")
+}
 
 ################################################################################
 ##
@@ -61,15 +66,15 @@ dat <- reshape(dat, times = yrs, direction = "long",
                timevar = "YEAR")
 dat$YEAR <- factor(dat$YEAR)
 pp <- dat[!is.na(dat$DBH) | !is.na(dat$HT), ]
-saveRDS(pp, "~/work/hoods/explore/temp/pp.rds")
+saveRDS(pp, "temp/pp.rds")
 
 ################################################################################
 ##
 ##                                    MNM
 ##
 ################################################################################
-source("~/work/functions/neighborhoods/rewrite/final/mnm.R")
-source("~/work/functions/neighborhoods/rewrite/final/mnm-to-matrix.R")
+source("../mnm/mnm.R")
+source("../mnm/mnm-to-matrix.R")
 
 ## mnm function requires "time" variable, and lowercase column names
 matDat <- pp
@@ -132,7 +137,7 @@ dat$YEAR <- factor(dat$YEAR)
 tp <- dat[!is.na(dat$DBH), ]
 tp$BA <- 0.00007854*tp$DBH*tp$DBH
 
-saveRDS(tp, "~/work/hoods/explore/temp/tp.rds")
+saveRDS(tp, "temp/tp.rds")
 
 ## ## Add canopy heights
 ## inds <- match(interaction(dat$TPLOT, dat$TRAN, dat$YEAR),
