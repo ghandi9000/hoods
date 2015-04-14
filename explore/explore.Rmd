@@ -138,11 +138,18 @@ sidebarLayout(
     helpText("Choose individual plot for closer inspection."),
     selectInput("plot", "Choose Plot:", choices=unique(pp$PPLOT)),
     br(),
-    selectInput("type", "Plot Type:", choices=c("Histogram", "Position", "Density", "Scatter")),
+    selectInput("type", "Plot Type:", 
+                choices=c("Histogram", "Position", "Density", "Scatter")),
     conditionalPanel(
       condition = "input.type == 'Scatter'",
       selectInput("yVar", "Y", choices=c("HT", "HTOBS", "DBH", "BV", "BA")),
       selectInput("xVar", "X", choices=c("DBH", "BV", "BA", "HT", "HTOBS")),
+      selectInput("splitScatter", "Split:", 
+                  choices=c("None", "CANHT", "SPEC")),
+      conditionalPanel(
+          condition = "input.yVar == 'HT' && input.xVar == 'DBH'",
+          checkboxInput("showFit", "Show fitted")
+        ),
       checkboxInput("smoother", "Add smoothed spline"),
       conditionalPanel(
         condition = "input.smoother == true",
@@ -164,47 +171,66 @@ sidebarLayout(
     ),
       
   mainPanel(  
+    
     renderPlot({
       plot <- as.numeric(input$plot)
       r <- nRad()
       nm <- nMat()
       species <- levels(pp$SPEC)
-      if (input$chooseSpec)
-        species <- input$spec
+      if (input$chooseSpec) species <- input$spec
       nmInds <- nm$targets$pplot == plot & nm$targets$spec %in% species
       ppInds <- pp$PPLOT == plot & pp$STAT == "ALIVE" & pp$SPEC %in% species
+      
       if (input$targets) 
         ppInds <- ppInds & pp$id %in% nm$targets[nmInds, "id"]
       
+      #########################################################
+      ##                      Plot types                     ##
+      #########################################################
       if (input$type == "Histogram") {
         counts <- rowSums(!is.na(nm$ba[nmInds,]))
         p1 <- ggplot(cbind(counts=counts, nm$targets[nmInds,]), aes(counts)) +
           geom_histogram() + facet_wrap(~time) +
           ggtitle(paste0("Histograms of Neighbor Counts(radius=", r, "), Plot=", plot))
         print(p1)
-      }
-      else if (input$type == "Density") {
+      } else if (input$type == "Density") {
         specs <- pp[ppInds,] %>% group_by(SPEC, YEAR) %>% filter(n() > 2)
         ggplot(specs, aes(BQUDX, BQUDY, size=BA, color=SPEC)) + 
-          geom_density2d() + facet_wrap(~YEAR) +
+          geom_density2d(na.rm=TRUE) + facet_wrap(~YEAR) +
           ggtitle("Species Densities (removed species with counts <= 2)")
-      }
-      else if (input$type == "Position") {
-        p1 <- ggplot(pp[ppInds,], aes(BQUDX, BQUDY, size=BA, color=SPEC)) + geom_point(alpha=0.5) +
-          facet_wrap(~YEAR) + xlim(0.8, 10.2) + ylim(0.8, 10.2) + geom_hline(yintercept=c(1, 10)) +
-          geom_vline(xintercept=c(1, 10))
-        if (input$colorTargets) {
-          inds <- pp$PPLOT == plot & pp$STAT == "ALIVE" & pp$id %in% nm$targets[nmInds, "id"]
-          p1 <- p1 + geom_point(data=pp[inds,], aes(BQUDX, BQUDY), color="red")
-          }
-        print(p1)
-      }
-      else if (input$type == "Scatter") {
-        p1 <- ggplot(pp[ppInds,], aes_string(input$xVar, input$yVar, color="YEAR")) + 
+      } else if (input$type == "Position") {
+        p1 <- ggplot(pp[ppInds,], aes(BQUDX, BQUDY, size=BA, color=SPEC)) +
           geom_point(alpha=0.5) +
-          ggtitle(paste(input$yVar,"vs", input$xVar, "Plot=", plot))
-        if (input$smoother)
+          facet_wrap(~YEAR) + xlim(0.8, 10.2) + ylim(0.8, 10.2) + 
+          geom_hline(yintercept=c(1, 10), lty=2) +
+          geom_vline(xintercept=c(1, 10), lty=2)
+        
+        if (input$colorTargets) {
+          inds <- pp$PPLOT == plot & pp$STAT == "ALIVE" & 
+            pp$id %in% nm$targets[nmInds, "id"]
+          
+          p1 <- p1 + geom_point(data=pp[inds,], 
+                                aes(BQUDX, BQUDY), color="red")
+          }
+        
+        print(p1)
+      } else if (input$type == "Scatter") {
+        p1 <- ggplot(pp[ppInds,], 
+                     aes_string(input$xVar, input$yVar, color="YEAR")) + 
+          geom_point(alpha=0.5) +
+          ggtitle(paste(input$yVar,"vs", input$xVar, ", Plot=", plot))
+        
+        if (input$splitScatter != "None")
+          p1 <- p1 + facet_wrap(as.formula(paste("~", input$splitScatter)))
+        
+        if (input$smoother) 
           p1 <- p1 + geom_smooth(fill=NA, method=input$smoothMethod)
+        
+        if (input$showFit) {
+          inds <- ppInds & is.na(pp$HTOBS)
+          p1 <- p1 + geom_line(data=pp[inds,], aes(DBH, HT, color=YEAR))
+        }
+        
         print(p1)
         }
       })
@@ -221,19 +247,122 @@ sidebarLayout(
 Examine various ways of estimating neighborhood values and look, visually, at the effect on growth.
 
 ```{r hoods_growth, cache=FALSE}
+require(grid)
 
 sidebarLayout(
   
   sidebarPanel(
     helpText("Choose individual plot for closer inspection."),
     selectInput("plot2", "Choose Plot:", choices=unique(pp$PPLOT)),
-    br()
+    br(),
+    selectInput("type2", "Plot type:", 
+                choices=c("Vector Growth", "Neighbor Count", "Histogram", "etc")),
+    conditionalPanel(
+      condition = "input.type2 == 'Histogram'",
+      helpText("Binning variable, g means _Growth_"),
+      selectInput("histVar", "X", choices=c("gDBH", "gHT", "gHTOBS", "gBV", "gBA"))
+      # sliderInput("binWidth", "Binwidth", min=0.00001, max=.05, value=0.03, step=0.0001)
+      ),
+    conditionalPanel(
+      condition = "input.type2 == 'Neighbor Count'",
+      checkboxInput("nCountVector", "Vector", FALSE),
+      conditionalPanel(
+        condition = "input.nCountVector == true",
+        selectInput("nCountVectorY", "Y", choices=c("HT", "HTOBS", "DBH", "BV", "BA"))
+        ),
+      conditionalPanel(
+        condition = "input.nCountVector == false",
+        selectInput("nCountY", "Y", choices=c("gHT", "gHTOBS", "gDBH", "gBV", "gBA"))
+        )
+      ),
+    conditionalPanel(
+      condition = "input.type2 == 'Vector Growth'",
+      selectInput("yVar2", "Y", choices=c("HT", "HTOBS", "DBH", "BV", "BA")),
+      selectInput("xVar2", "X", choices=c("DBH", "BV", "BA", "HT", "HTOBS")),
+      selectInput("splitScatter2", "Split:", 
+                  choices=c("None", "SPEC")),
+      checkboxInput("addPoints", "Points"),
+      conditionalPanel(
+        condition = "input.yVar2 == 'HT' && input.xVar2 == 'DBH'",
+        checkboxInput("showFit2", "Show fitted")
+        ),
+      checkboxInput("smoother2", "Add smoothed spline"),
+      conditionalPanel(
+        condition = "input.smoother2 == true",
+        selectInput("smoothMethod2", "Method",
+                    list("loess", "lm", "glm", "gam", "rlm"))
+        )
+      ),
+    checkboxInput("chooseSpec2", "Choose Species"),
+    conditionalPanel(
+      condition = "input.chooseSpec2 == true",
+      checkboxGroupInput("spec2", "Species:", choices=c(levels(pp$SPEC)), selected=c("ABBA"))
+      ),
+    checkboxInput("onlyTargets", "Targets only")
     ),
   
   mainPanel(
+    
     renderPlot({
       plot <- as.numeric(input$plot2)
-      ggplot(pp[pp$PPLOT == plot,], aes(DBH, HT, color=YEAR)) + geom_point(alpha=0.5)
+      r <- nRad()
+      nm <- nMat()
+      species <- levels(pp$SPEC)
+      if (input$chooseSpec2) species <- input$spec2
+      nmInds <- nm$targets$pplot == plot & nm$targets$spec %in% species
+      ppInds <- pp$PPLOT == plot & pp$STAT == "ALIVE" & pp$SPEC %in% species
+      
+      if (input$onlyTargets) 
+        ppInds <- ppInds & pp$id %in% nm$targets[nmInds, "id"]
+      
+      #########################################################
+      ##                      Plot types                     ##
+      #########################################################
+      if (input$type2 == "Vector Growth") {
+        p1 <- ggplot(pp[ppInds,], aes_string(input$xVar2, input$yVar2, color="YEAR")) + 
+          geom_path(alpha=0.5, aes(group=id), arrow=arrow(), na.rm=TRUE) +
+          ggtitle(paste0("Vector Growth, Plot=", plot))
+        
+        if (input$addPoints)
+          p1 <- p1 + geom_point(alpha=0.3, na.rm=TRUE)
+        
+        if (input$splitScatter2 != "None")
+          p1 <- p1 + facet_wrap(as.formula(paste("~", input$splitScatter2)))
+        
+        if (input$smoother2) 
+          p1 <- p1 + geom_smooth(fill=NA, method=input$smoothMethod2, na.rm=TRUE)
+        
+        if (input$showFit2) {
+          inds <- ppInds & is.na(pp$HTOBS)
+          p1 <- p1 + geom_line(data=pp[inds,], aes(DBH, HT, color=YEAR), lwd=2, na.rm=TRUE)
+          }
+        print(p1)
+        
+        } else if (input$type2 == "Vector Growth: Neighbor Count") {
+          tPars <- gsub("ba", "BA", deparse(attributes(nm)$target_par))
+          inds <- ppInds & pp$id %in% nm$targets[nmInds, "id"] & 
+            eval(parse(text = tPars), pp)
+          counts <- rowSums(!is.na(nm$ba[nmInds,]))
+          
+          if (input$nCountVector)
+            p1 <- ggplot(cbind(pp[inds,], counts=counts), aes_string("counts", input$nCountVectorY)) +
+            geom_point(na.rm=TRUE) + 
+            geom_path(alpha=0.5, aes(group=id), arrow=arrow(), na.rm=TRUE)
+          
+          if (input$nCountY)
+            p1 <- ggplot(cbind(pp[inds,], counts=counts), aes_string("counts", input$nCountY)) +
+            geom_point(na.rm=TRUE)
+          
+          print(p1)
+        
+        } else if (input$type2 == "Histogram") {
+          ggplot(pp[ppInds,], aes_string(input$histVar)) + 
+            geom_histogram() # binwidth=as.numeric(input$binWidth))
+
+        } else {
+          ## Do nothing
+        }
+      
       })
     )
   )
