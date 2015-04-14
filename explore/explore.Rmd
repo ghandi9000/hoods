@@ -167,7 +167,8 @@ sidebarLayout(
       checkboxGroupInput("spec", "Species:", choices=c(levels(pp$SPEC)), selected=c("ABBA"))
       ),
     br(),
-    checkboxInput("targets", "Just Targets")
+    checkboxInput("targets", "Just Targets"),
+    downloadButton("saveButton1", "Save")
     ),
       
   mainPanel(  
@@ -192,12 +193,13 @@ sidebarLayout(
         p1 <- ggplot(cbind(counts=counts, nm$targets[nmInds,]), aes(counts)) +
           geom_histogram() + facet_wrap(~time) +
           ggtitle(paste0("Histograms of Neighbor Counts(radius=", r, "), Plot=", plot))
-        print(p1)
+ 
       } else if (input$type == "Density") {
         specs <- pp[ppInds,] %>% group_by(SPEC, YEAR) %>% filter(n() > 2)
-        ggplot(specs, aes(BQUDX, BQUDY, size=BA, color=SPEC)) + 
+        p1 <- ggplot(specs, aes(BQUDX, BQUDY, size=BA, color=SPEC)) + 
           geom_density2d(na.rm=TRUE) + facet_wrap(~YEAR) +
           ggtitle("Species Densities (removed species with counts <= 2)")
+        
       } else if (input$type == "Position") {
         p1 <- ggplot(pp[ppInds,], aes(BQUDX, BQUDY, size=BA, color=SPEC)) +
           geom_point(alpha=0.5) +
@@ -213,7 +215,6 @@ sidebarLayout(
                                 aes(BQUDX, BQUDY), color="red")
           }
         
-        print(p1)
       } else if (input$type == "Scatter") {
         p1 <- ggplot(pp[ppInds,], 
                      aes_string(input$xVar, input$yVar, color="YEAR")) + 
@@ -229,10 +230,23 @@ sidebarLayout(
         if (input$showFit) {
           inds <- ppInds & is.na(pp$HTOBS)
           p1 <- p1 + geom_line(data=pp[inds,], aes(DBH, HT, color=YEAR))
+          }
         }
-        
-        print(p1)
-        }
+      
+      print ( p1 )
+      
+      ## Saving graphs
+      output$saveButton1 <-
+        downloadHandler(
+          filename = paste0(gsub("[: ]", "_", input$type), "_plot_", 
+                            plot, "_radius_", r, ".png"),
+          content = function(file) {
+            device <- function(..., width, height) {
+              grDevices::png(..., width=width, height=height,
+                             res=300, units="in")
+              }
+          ggsave(file, plot=p1, device=device)
+          })
       })
     
     )
@@ -298,9 +312,10 @@ sidebarLayout(
       condition = "input.chooseSpec2 == true",
       checkboxGroupInput("spec2", "Species:", choices=c(levels(pp$SPEC)), selected=c("ABBA"))
       ),
-    checkboxInput("onlyTargets", "Targets only")
+    checkboxInput("onlyTargets", "Targets only"),
+    downloadButton("saveButton2", "Save")
     ),
-  
+
   mainPanel(
     
     renderPlot({
@@ -336,7 +351,6 @@ sidebarLayout(
           inds <- ppInds & is.na(pp$HTOBS)
           p1 <- p1 + geom_line(data=pp[inds,], aes(DBH, HT, color=YEAR), lwd=2, na.rm=TRUE)
           }
-        print(p1)
         
         } else if (input$type2 == "Vector Growth: Neighbor Count") {
           tPars <- gsub("ba", "BA", deparse(attributes(nm)$target_par))
@@ -352,16 +366,29 @@ sidebarLayout(
           if (input$nCountY)
             p1 <- ggplot(cbind(pp[inds,], counts=counts), aes_string("counts", input$nCountY)) +
             geom_point(na.rm=TRUE)
-          
-          print(p1)
         
         } else if (input$type2 == "Histogram") {
-          ggplot(pp[ppInds,], aes_string(input$histVar)) + 
+          p1 <- ggplot(pp[ppInds,], aes_string(input$histVar)) + 
             geom_histogram() # binwidth=as.numeric(input$binWidth))
-
+          
         } else {
           ## Do nothing
         }
+      
+      print ( p1 )
+      
+      ## Saving graphs
+      output$saveButton2 <-
+        downloadHandler(
+          filename = paste0(gsub("[: ]", "_", input$type2), "_plot_", 
+                            plot, "_radius_", r, ".png"),
+          content = function(file) {
+            device <- function(..., width, height) {
+              grDevices::png(..., width=width, height=height,
+                             res=300, units="in")
+              }
+          ggsave(file, plot=p1, device=device)
+          })
       
       })
     )
