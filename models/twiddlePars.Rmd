@@ -4,7 +4,6 @@ date: "Generated: `r Sys.Date()`"
 runtime: shiny
 output:
     html_document:
-        mathjax: "http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"
         toc: true
         toc_depth: 3
         theme: spacelab
@@ -13,38 +12,66 @@ output:
 ---
 
 ```{r global_opts, include=FALSE}
+# mathjax: "http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"
 
 knitr::opts_chunk$set(fig.path="./Figs", echo=FALSE, warning=FALSE,
                       message=FALSE, dev='svg')
 
 ```
+-------
 
 # Info
 * [code](https://github.com/ghandi9000/hoods)
-* Models:
-    + Logistic NCI
+
+-------
 
 # Setup
 Model/neighborhood config
+
 * Neighbor radii:
     + `1` is just the quadrat containing target
     + `2` is 3x3 (2 quadrats in all directions from target, including target's quadrat)
     + `3` is 5x5
     
+-------
+
 ```{r setup}
 
 require(xtable)
 source("setup.R")
 source("hood_functions.R")
 
+model <- reactive({
+  source(paste0(input$model, ".R"))
+  input$model
+  })
+sizeVar <- reactive(input$sizeVar)
+
+mod <- renderUI({
+  model()
+  withMathJax(printModel(sizeVar()))
+  })
+
+shinyUI(fluidPage(
+  
+  titlePanel("Model Selection"),
+  
+  sidebarLayout(
+    sidebarPanel(
+      selectInput("model", "Model:", choices=c("log-nci", "power-nci")),
+      selectInput("sizeVar", "Size variable:", choices=c("BV", "BA", "DBH", "HT")),
+      selectInput("radius", "Neighbor radius:", choices=c(1,2,3))
+      ),  
+    
+    mainPanel(      
+      tabsetPanel(
+        tabPanel("Summary", mod),
+        tabPanel("Parameters", renderText({ "In progress" })),
+        tabPanel("Statistics", renderText({ "In progress" }))
+        )
+      )
+    )
+  ))
+
 ```
 
-# Logistic NCI
-
-```{r log-nci, results='markup'}
-source("log-nci.R")
-renderText({  
-  printModel("ba")
-})
-
-```

@@ -4,3 +4,5 @@ Figs/
 temp/
 images/
 *cache/
+*.pdf
+.Rdata

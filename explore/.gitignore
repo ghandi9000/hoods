@@ -4,3 +4,4 @@ Figs/
 temp/
 images/
 *cache/
+*.pdf
