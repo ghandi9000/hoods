@@ -42,7 +42,7 @@ source("setup.R")
 source("hood_functions.R")
 
 model <- reactive({
-  source(paste0(input$model, ".R"))
+  source(paste0(input$model, "/", input$model, ".R"))
   input$model
   })
 sizeVar <- reactive(input$sizeVar)

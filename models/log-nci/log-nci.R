@@ -3,7 +3,7 @@
 ## Description: Size logistic nci model
 ## Author: Noah Peart
 ## Created: Tue Apr 14 17:40:40 2015 (-0400)
-## Last-Updated: Tue Apr 14 21:44:40 2015 (-0400)
+## Last-Updated: Fri Apr 17 12:32:23 2015 (-0400)
 ##           By: Noah Peart
 ######################################################################
 
@@ -39,7 +39,7 @@ normNLL <- function(params, x, targSize, nbrSizes, nbrDists) {
 ## targSize is vector of target sizes
 model <- function(ps, targSize, nbrSizes, nbrDists) {
     PG <- ps[["PG"]]
-    b <- ps[["b"]]
+#    b <- ps[["b"]]
     alpha <- ps[["alpha"]]
     beta <- ps[["beta"]]
     D <- ps[["D"]]
@@ -52,3 +52,34 @@ model <- function(ps, targSize, nbrSizes, nbrDists) {
     compEffect <- exp(-C * nci^D)
     PG * sizeEffect * compEffect
 }
+
+## Run model
+run_fit <- function(nms, growthVar, tSizeVar, nSizeVar, ps, yr, method="L-BFGS-B", maxit=1e5) {
+    require(bbmle)
+    parnames(normNLL) <- c(names(ps))
+    ht <- paste0("HT", yr)
+    dbh <- paste0("DBH", yr)
+    fit <- mle2(normNLL,
+                start = unlist(ps, recursive = FALSE),
+                data = list(
+                x=nms$targets[[growthVar]],
+                targSize=nms$targets[[sizeVar]],
+                nbrSizes=nms[[nSizeVar]],
+                nbrsDists=nms[["distance"]]),
+                method = method,
+                control = list(maxit = maxit))
+    return( fit )
+}
+
+################################################################################
+##
+##                                   Test
+##
+################################################################################
+## Parameters
+## X0 > 0, sd > 0, Xb > 0, C > 0, PG > 0
+ps <- list(PG=0.003358567, alpha=1, beta=1, X0=1, Xb=1, C=1, D=1, sd=1)
+lows <- c(0, -Inf, -Inf, 0, 0, 0, -Inf, 0)
+highs <- c(Inf, Inf, Inf, Inf, Inf, Inf, Inf)
+
+## nm <- readRDS("temp/nm2.rds")
