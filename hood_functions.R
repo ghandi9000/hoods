@@ -3,25 +3,11 @@
 ## Description: Neighborhood functions
 ## Author: Noah Peart
 ## Created: Sun Apr 12 18:25:37 2015 (-0400)
-## Last-Updated: Fri Apr 17 23:20:34 2015 (-0400)
+## Last-Updated: Fri Apr 17 14:12:27 2015 (-0400)
 ##           By: Noah Peart
 ######################################################################
 ## Possible neighborhood sizes: [9, 25, 49]
-##source("~/work/functions/functions-coordinates.R")  # euclidean
-
-## Euclidean distance
-## euc <- function(pxi, pyi, pxs, pys, recycle=FALSE) {
-##     if (!recycle && length(pxi) > 1 && length(pxi) != length(pxs))
-##         stop("Should initial points be recycled?")
-##     return( sqrt((pxi - pxs)^2 + (pyi - pys)^2) )
-## }
-euc <- function(a, b) {
-    a <- as.matrix(a)
-    b <- as.matrix(b)
-    if (dim(b)[2] == 1)
-        b <- matrix(rep(b, dim(a)[2]), dim(a)[1])
-    return ( sqrt(colSums((a-b)^2)) )
-}
+source("~/work/functions/functions-coordinates.R")  # euclidean
 
 ## Get neighbors of tree
 ## dist: max distance from target to search for neighbors
@@ -44,7 +30,7 @@ findTargets <- function(plot, ndist, yr, dat) {
 }
 
 ## Add neighborhood distances
-addDists <- function(nm, distName="distance", offset=0.5) {
+addDists <- function(nm, distName="distance") {
     nm[[distName]] <- matrix(nrow=dim(nm[["id"]])[1], ncol=dim(nm[["id"]])[2])
     for (i in seq_along(nm$targets$id)) {
         nebs <- cbind(nm[["bqudx"]][i,], nm[["bqudy"]][i,])
@@ -53,38 +39,8 @@ addDists <- function(nm, distName="distance", offset=0.5) {
         if (dim(nebs)[2] > 0)
             nm[[distName]][i, 1:dim(nebs)[2]] <- euc(nebs, t(nm$targets[i, c("bqudx", "bqudy")]))
     }
-    nm[[distName]][nm[[distName]] == 0] <- offset
     return ( nm )
 }
-
-## Get current best fit
-getFit <- function(modName, spec=NULL) {
-    filename <- paste0(modName, "/fit.rds")
-    if (!missing(spec)) dir <- paste0(modName, "/", spec, "/fit.rds")
-    if (!file.exists(filename))
-        return ( NULL )
-    return ( readRDS(dir) )
-}
-
-## NCI values
-nciVals <- function(nm, targs, nSize, alpha, beta) {
-    if (alpha == 0)
-        return ( nbrCount(nm, targs, nSize) )
-    return ( rowSums(nm[[nSize]][targs,]**alpha /
-                         nm[["distance"]][targs,]**beta, na.rm=TRUE) )
-}
-
-nbrCount <- function(nm, targs, nSize) {
-    return ( rowSums(!is.na(nm[[nSize]][targs,])) )
-}
-
-fitPowerGrowth <- function(dat, sizeVar, growthVar) {
-    dep <- dat[,growthVar]
-    ind <- dat[,sizeVar]
-    fit <- nls(dep ~ a*ind^b, start=list(a=0.01, b=0.5))
-    return ( fit )
-}
-
 
 ## library(stats4)
 ## library(MASS)

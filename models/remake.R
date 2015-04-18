@@ -3,7 +3,7 @@
 ## Description: Remake datasets for analysis
 ## Author: Noah Peart
 ## Created: Mon Apr 13 20:07:47 2015 (-0400)
-## Last-Updated: Tue Apr 14 12:47:04 2015 (-0400)
+## Last-Updated: Sat Apr 18 00:17:49 2015 (-0400)
 ##           By: Noah Peart
 ######################################################################
 require(plyr)
@@ -35,14 +35,12 @@ dat[,paste0("BA",yrs)] <- 0.00007854 * dat[,paste0("DBH", yrs)]**2
 ## Growth columns
 vars <- c("DBH", "ht", "bv", "canht", "HTTCR", "BA")
 for (v in vars) {
-    dat[,paste0("g_", v, 98)] <- ifelse(is.na(dat[,paste0(v, 86)]),
-                                        (dat[,paste0(v, 98)] - dat[,paste0(v, 87)])/11,
-                                        (dat[,paste0(v, 98)] - dat[,paste0(v, 86)])/12)
-    dat[,paste0("g_", v, 10)] <- (dat[,paste0(v, 10)] - dat[,paste0(v, 98)])/12
+    dat[,paste0("g_", v, 86)] <- (dat[,paste0(v, 98)] - dat[,paste0(v, 86)])/12
+    dat[,paste0("g_", v, 87)] <- (dat[,paste0(v, 98)] - dat[,paste0(v, 87)])/11
+    dat[,paste0("g_", v, 98)] <- (dat[,paste0(v, 10)] - dat[,paste0(v, 98)])/12
 }
 
-dat[,paste0("g_", vars, 86)] <- NA
-dat[,paste0("g_", vars, 87)] <- NA
+dat[,paste0("g_", vars, 10)] <- NA
 dat$CPOS86 <- NA  # no crown positions measured in 86
 dat <- reshape(dat, times = yrs, direction = "long",
                varying = list(
@@ -75,6 +73,7 @@ saveRDS(pp, "temp/pp.rds")
 ################################################################################
 source("../mnm/mnm.R")
 source("../mnm/mnm-to-matrix.R")
+source('../hood_functions.R')
 
 ## mnm function requires "time" variable, and lowercase column names
 matDat <- pp
@@ -89,7 +88,9 @@ tPars <- quote(!is.na(ba) &
 nPars <- quote(!is.na(neighbor[["ba"]]))
 ##               neighbor[["ba"]] >= target[["ba"]])
 
-nCols <- c("ba", "id", "bqudx", "bqudy", "spec", "elevcl", "aspcl")
+nCols <- c("ba", "id", "bqudx", "bqudy", "spec", "elevcl", "aspcl", "decm", "cpos",
+           "gdbh", "ght", "ghtobs", "canht", "gcanht", "gba", "gbv", "bv", "ht",
+           "htobs")
 
 dPars <- quote(!is.na(ba) &
                stat == "ALIVE" &
@@ -106,6 +107,7 @@ for (i in 1:3) {
     nLst <- mnm(tPars = tPars, nPars = nPars, dPars = dPars, nCols = nCols,
                 nRad = i, dat = matDat, parallel=F)
     nm <- mnm_to_matrix(nLst)
+    nm <- addDists(nm)  # add neighbor distances from targets
     saveRDS(nm, paste0("temp/nm", i, ".rds"))
   }
 }

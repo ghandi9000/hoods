@@ -1,5 +1,5 @@
 ---
-title: "Twiddle model parameters"
+title: "Test Neighborhood Models"
 date: "Generated: `r Sys.Date()`"
 runtime: shiny
 output:
@@ -35,22 +35,50 @@ Model/neighborhood config
     
 -------
 
-```{r setup}
+# Select Model
 
+```{r setup}
+require(ggplot2)
 require(xtable)
 source("setup.R")
 source("hood_functions.R")
 
-model <- reactive({
+getModel <- reactive({
   source(paste0(input$model, "/", input$model, ".R"))
   input$model
   })
-sizeVar <- reactive(input$sizeVar)
 
 mod <- renderUI({
-  model()
-  withMathJax(printModel(sizeVar()))
+  getModel()
+  response <- printModel(input$growthVar, input$tSizeVar, input$nSizeVar)
+  withMathJax(response)
   })
+
+stats <- renderUI({
+  getModel()
+  fit <- getFit(input$model)
+  summary(fit)
+})
+
+pars <- renderUI({
+  getModel()
+  fit <- getFit(input$model)
+  coef(fit)
+})
+
+nRad <- reactive(as.numeric(input$radius))  # get neighbor radius from input
+nMat <- reactive({
+    rad <- nRad()
+    if (file.exists(paste0("temp/nm", rad, ".rds"))) readRDS(paste0("temp/nm", rad, ".rds"))
+    else {
+        nLst <- mnm(tPars = tPars, nPars = nPars, dPars = dPars, nCols = nCols,
+                    nRad = rad, dat = matDat, parallel=F)
+        nmat <- mnm_to_matrix(nLst)
+        nmat <- addDists(nm = nmat)
+        saveRDS(nmat, paste0("temp/nm", rad, ".rds"))
+        nmat
+    }
+})
 
 shinyUI(fluidPage(
   
@@ -58,16 +86,21 @@ shinyUI(fluidPage(
   
   sidebarLayout(
     sidebarPanel(
-      selectInput("model", "Model:", choices=c("log-nci", "power-nci")),
-      selectInput("sizeVar", "Size variable:", choices=c("BV", "BA", "DBH", "HT")),
-      selectInput("radius", "Neighbor radius:", choices=c(1,2,3))
+      selectInput("model", "Model:", choices=c("power-nci", "log-nci")),
+      selectInput("growthVar", "Growth variable:", choices=c("gBA", "gBV", "gDBH", "gHT", "gHTOBS",
+                                                             "gCANHT")),
+      selectInput("tSizeVar", "Target size variable:", choices=c("BA", "BV", "DBH", "HT", "HTOBS",
+                                                                 "CANHT")),
+      selectInput("nSizeVar", "Neighbor size variable:", choices=c("BA", "BV", "DBH", "HT", "HTOBS",
+                                                                   "CANHT")),
+      selectInput("radius", "Neighbor radius:", choices=c(2,1,3))
       ),  
     
     mainPanel(      
       tabsetPanel(
         tabPanel("Summary", mod),
-        tabPanel("Parameters", renderText({ "In progress" })),
-        tabPanel("Statistics", renderText({ "In progress" }))
+        tabPanel("Parameters", pars), # renderText({ " ... In progress ..." })),
+        tabPanel("Statistics", stats) # renderText({ " ... In progress ..." }))
         )
       )
     )
@@ -75,3 +108,198 @@ shinyUI(fluidPage(
 
 ```
 
+---------
+
+# Model parameters
+
+```{r tune_params, cache=FALSE}
+
+## Reactive values
+getPars <- reactive({
+  list(PG=as.numeric(input$PG),
+       b=as.numeric(input$b),
+       alpha=as.numeric(input$alpha),
+       beta=as.numeric(input$beta),
+       C=as.numeric(input$C),
+       D=as.numeric(input$D))
+  })
+
+getTargs <- reactive({
+  nm <- nMat()
+  nm$targets$pplot == as.numeric(input$plot)
+  })
+
+getPreds <- reactive({
+  getModel()
+  nm <- nMat()
+  ps <- getPars()
+  targs <- getTargs()
+  preds <- rep(NA, sum(targs))
+  do.call(model, 
+          list(ps=ps, 
+               targSize=nm$targets[targs, tolower(input$tSizeVar)],
+               nbrSizes=nm[[tolower(input$nSizeVar)]][targs,],
+               nbrDists=nm[["distance"]][targs,]))
+  })
+
+## Neighborhood values
+getNciVals <- reactive({
+  nm <- nMat()
+  targs <- getTargs()
+  nciVals(nm, targs, tolower(input$nSizeVar), input$alpha, input$beta)
+})
+
+getNbrCount <- reactive({
+  nm <- nMat()
+  targs <- getTargs()
+  nbrCount(nm, targs, tolower(input$nSizeVar))
+})
+
+## Plots
+predHist <- renderPlot({
+  targs <- getTargs()
+  nm <- nMat()
+  preds <- getPreds()
+  hist(preds, main=paste("Predicted", input$growthVar))
+  })
+
+nciDist <- renderPlot({
+  nci <- getNciVals()
+  if (input$nciVsCount & input$overlayCounts) {
+    dat <- data.frame(nci=nci, counts=getNbrCount())
+    p1 <- ggplot(dat, aes(counts, nci)) + geom_point(alpha=0.5)
+    } else {
+      dat <- data.frame(vals=c(nci, getNbrCount()),
+                        type=c(rep(c("nci", "count"), each=length(nci))))
+      if (input$nciVsCount)
+        p1 <- ggplot(dat, aes())
+      if (input$overlayCounts)
+        p1 <- ggplot(dat, aes(vals, fill=type))
+      else
+        p1 <- ggplot(dat[dat$type == "nci",], aes(vals))
+      if (input$splitNCI)
+        p1 <- p1 + facet_wrap(~type, nrow=2)
+      p1 <- p1 + geom_histogram(alpha=0.5) + ggtitle("NCI distribution")
+      }
+  
+  print ( p1 )
+})
+
+predPoints <- renderPlot({
+  ps <- getPars()
+  targs <- getTargs()
+  nm <- nMat()
+  pred <- getPreds()
+  data <- nm$targets[targs,]
+  data$pred <- pred
+  print(dim(data))
+  print(paste("pred:", length(pred)))
+  data$nci <- getNciVals()
+  
+  p1 <- ggplot(data, aes_string(tolower(input$tSizeVar), 
+                                tolower(input$growthVar), color="time"))
+  if (input$scalePoints)
+    p1 <- p1 + geom_point(alpha=0.5, aes(size=nci))
+  else
+    p1 <- p1 + geom_point(alpha=0.5)
+    
+  p1 <- p1 + ggtitle(paste(input$growthVar, "(scaled growth/yr) vs", 
+                           input$tSizeVar, "(start of growth period)"))
+  
+  if (input$showPred) {
+    if (input$scalePoints)
+      p1 <- p1 + geom_point(color="orange", aes_string(tolower(input$tSizeVar), "pred", size="nci"))
+    else
+      p1 <- p1 + geom_point(color="orange", aes_string(tolower(input$tSizeVar), "pred"))
+  }
+  
+  print ( p1 )
+})
+
+obsSum <- renderPlot({
+  data <- pp[pp$PPLOT == input$plot & pp$STAT == "ALIVE", ]
+  par(mfrow=c(1,2))
+  hist(data[, input$growthVar], xlab=input$growthVar, main=input$growthVar)
+  hist(data[, input$tSizeVar], xlab=input$tSizeVar, main=input$tSizeVar)
+})
+
+modResids <- renderPlot({
+  nm <- nMat()
+  targs <- getTargs()
+  dat <- nm$targets[targs,]
+  dat$preds <- getPreds()
+  dat$res <- dat[, tolower(input$growthVar)] - dat$preds
+  dat$nci <- getNciVals()
+  
+  if (input$resQQ) {
+    qqnorm(dat$res)
+    qqline(dat$res)
+    } else 
+      ggplot(dat, aes(preds, res, size=nci, color=time)) + geom_point(alpha=0.5) +
+    geom_hline(xintercept=0, lty=2) + ggtitle("Residuals vs. Fitted") + 
+    xlab("Fitted") + ylab("Residuals")
+  }) 
+
+fitGrowth <- renderTable({
+  nm <- nMat()
+  targs <- getTargs()
+  y <- nm$targets[targs, tolower(input$growthVar)]
+  x <- nm$targets[targs, tolower(input$tSizeVar)]
+  fit <- nls(y ~ a*x^b, start=list(a=0.01, b=0.5))
+  summary(fit)$parameters
+})
+
+## UI layout
+shinyUI(fluidPage(
+  
+  titlePanel("Adjust model parameters"),
+  
+  sidebarLayout(
+    sidebarPanel(
+      helpText("Choose plot to get sample data."),
+      selectInput("plot", "Plot:", choices=unique(pp$PPLOT)),
+      conditionalPanel(
+        condition = "input.model == 'power-nci'",
+        sliderInput("PG", "PG:", min=0, max=2, value=0.03, step=0.001),
+        sliderInput("b", "b", min=0, max=4, value=0, step=0.01),
+        sliderInput("alpha", "alpha", min=-2, max=2, value=0, step=0.01),
+        sliderInput("beta", "beta", min=-2, max=2, value=0, step=0.0001),
+        sliderInput("C", "C", min=-2, max=2, value=0, step=0.01),
+        sliderInput("D", "D", min=-2, max=2, value=0, step=0.01),
+        conditionalPanel(
+          condition = "input.tabs1 == 'Predicted Points'",
+          checkboxInput("scalePoints", "Scale by NCI"),
+          checkboxInput("showPred", "Predicted")
+          ),
+        conditionalPanel(
+          condition = "input.tabs1 == 'NCI distribution'",
+          checkboxInput("overlayCounts", "Overlay Neighbor Counts"),
+          checkboxInput("splitNCI", "Split graphs"),
+          conditionalPanel(
+              condition = "input.overlayCounts == true",
+              checkboxInput("nciVsCount", "NCI vs Count")
+            )
+          ),
+        conditionalPanel(
+          condition = "input.tabs1 == 'Residuals'",
+          checkboxInput("resQQ", "QQ")
+          )
+        )
+      ),
+    
+    mainPanel(
+      tabsetPanel(
+        id = "tabs1",
+        tabPanel("Observed", obsSum),
+        tabPanel("Predicted", predHist),
+        tabPanel("Predicted Points", predPoints),
+        tabPanel("NCI distribution", nciDist),
+        tabPanel("Residuals", modResids),
+        tabPanel("Fit Growth", fitGrowth)
+        )
+      ) 
+    )
+  ))
+
+
+```
