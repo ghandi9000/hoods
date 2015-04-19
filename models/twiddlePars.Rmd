@@ -81,8 +81,13 @@ nMat <- reactive({
 })
 
 shinyUI(fluidPage(
-  
-  titlePanel("Model Selection"),
+  includeCSS(path="www/bootstrap.css"),
+
+  titlePanel(
+    h1("Model Selection",
+             style = "font-family: 'Lobster', cursive;
+             font-weight: 500, line-height: 1.1;
+             color: #4d3a7d;")),
   
   sidebarLayout(
     sidebarPanel(
@@ -251,7 +256,7 @@ fitGrowth <- renderTable({
 
 ## UI layout
 shinyUI(fluidPage(
-  
+  theme = "www/bootstrap.css",
   titlePanel("Adjust model parameters"),
   
   sidebarLayout(
