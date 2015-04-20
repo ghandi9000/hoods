@@ -12,4 +12,6 @@ __py*
 *.mp4
 *.html
 
+!models/www/
+!models/www/*
 !.gitignore
