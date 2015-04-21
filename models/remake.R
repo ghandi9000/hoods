@@ -3,7 +3,7 @@
 ## Description: Remake datasets for analysis
 ## Author: Noah Peart
 ## Created: Mon Apr 13 20:07:47 2015 (-0400)
-## Last-Updated: Mon Apr 20 13:48:04 2015 (-0400)
+## Last-Updated: Tue Apr 21 12:00:46 2015 (-0400)
 ##           By: Noah Peart
 ######################################################################
 require(plyr)
@@ -13,10 +13,14 @@ require(dplyr)
 if (file.exists("temp/pp.csv") & file.exists("temp/transect.csv")) {
     pp <- read.csv("temp/pp.csv")
     tp <- read.csv("temp/transect.csv")
+} else if (file.exists("../data/pp.csv")) {
+    pp <- read.csv("../data/pp.csv")
+    tp <- read.csv("../data/transect.csv")
 } else {
     pp <- read.csv("~/work/temp/pp.csv")
     tp <- read.csv("~/work/temp/transect.csv")
 }
+
 
 ################################################################################
 ##

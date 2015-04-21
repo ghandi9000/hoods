@@ -11,6 +11,8 @@ __py*
 *.class
 *.mp4
 *.html
+data
+*.zip
 
 !models/www/
 !models/www/*
