@@ -351,8 +351,7 @@ sidebarLayout(
           inds <- ppInds & is.na(pp$HTOBS)
           p1 <- p1 + geom_line(data=pp[inds,], aes(DBH, HT, color=YEAR), lwd=2, na.rm=TRUE)
           }
-        
-        } else if (input$type2 == "Vector Growth: Neighbor Count") {
+        } else if (input$type2 == "Neighbor Count") {
           tPars <- gsub("ba", "BA", deparse(attributes(nm)$target_par))
           inds <- ppInds & pp$id %in% nm$targets[nmInds, "id"] & 
             eval(parse(text = tPars), pp)
@@ -363,10 +362,10 @@ sidebarLayout(
             geom_point(na.rm=TRUE) + 
             geom_path(alpha=0.5, aes(group=id), arrow=arrow(), na.rm=TRUE)
           
-          if (input$nCountY)
+          if (!input$nCountVector)
             p1 <- ggplot(cbind(pp[inds,], counts=counts), aes_string("counts", input$nCountY)) +
             geom_point(na.rm=TRUE)
-        
+          
         } else if (input$type2 == "Histogram") {
           p1 <- ggplot(pp[ppInds,], aes_string(input$histVar)) + 
             geom_histogram() # binwidth=as.numeric(input$binWidth))
