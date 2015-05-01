@@ -1,0 +1,8 @@
+Figs/
+*.md
+*.zip
+temp/
+images/
+*cache/
+*.pdf
+.Rdata

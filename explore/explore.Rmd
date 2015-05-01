@@ -18,7 +18,7 @@ knitr::opts_chunk$set(fig.path='./Figs', echo=FALSE, warning=FALSE, message=FALS
 -------------------
 
 # Info
-* [code](https://github.com/ghandi9000/hoods)
+* [code](https://github.com/nverno/hoods)
 * Basic neighbor relationship to target: BA / Distance, negative exponential decrease?
 * Ways to __quantify__ a neighborhood (possibly relative to target size where applicable):
     + Sum total neighbor values (ie. BA/Distance)

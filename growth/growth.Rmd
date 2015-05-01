@@ -1,0 +1,137 @@
+---
+title: "Growth vs. Neighborhood"
+date: "Generated: `r Sys.Date()`"
+runtime: shiny
+output:
+    html_document:
+        toc: true
+        toc_depth: 3
+        theme: cerulean
+        highlight: zenburn
+        number_sections: false
+---
+
+```{r global_opts, include=FALSE}
+
+knitr::opts_chunk$set(fig.path="./Figs", echo=FALSE, warning=FALSE,
+                      message=FALSE, dev='svg')
+
+```
+
+-------
+
+# Info
+* [code](https://github.com/nverno/hoods)
+
+-------
+
+# Setup
+Model/neighborhood config
+
+* Neighbor radii:
+    + `1` is just the quadrat containing target
+    + `2` is 3x3 (2 quadrats in all directions from target, including target's quadrat)
+    + `3` is 5x5
+    
+-------
+
+
+Choose parameters related to neighborhood.
+
+```{r setup}
+require(ggplot2)
+require(xtable)
+source("setup.R")
+
+selectInput("nrad", "Neighbor Radius:", choices=1:3)
+checkboxInput("nbrsSmaller", "Smaller (or same size) neighbors only")
+conditionalPanel(
+    condition = "input.nbrsSmaller == true",
+    selectInput("nbrsSmallerBy", "Smaller by:", 
+                choices=c("BA", "HT"))
+)
+
+nRad <- reactive({ as.numeric(input$nrad) })
+nMat <- reactive({
+    rad <- nRad()
+    if (file.exists(paste0("temp/nm", rad, ".rds"))) readRDS(paste0("temp/nm", rad, ".rds"))
+    else {
+        nLst <- mnm(tPars = tPars, nPars = nPars, dPars = dPars, nCols = nCols,
+                    nRad = rad, dat = matDat, parallel=F)
+        nmat <- mnm_to_matrix(nLst)
+        saveRDS(paste0("temp/nm", rad, ".rds"))
+        nmat
+    }
+})
+nbrInds <- reactive({
+    input$nbrsSmaller
+    if (input$nbrsSmaller) {
+        dep <- tolower(input$nbrsSmallerBy)
+        nmat <- nMat()
+        nmat[[dep]] >= nmat$targets[[dep]]
+    }
+})
+
+```
+
+```{r cache=FALSE}
+
+################################################################################
+##
+##                              Reactive Inputs
+##
+################################################################################
+getData <- reactive({
+    
+})
+
+scatter <- renderPlot({
+    
+})
+
+resids <- renderPlot({
+    
+})
+
+distribution <- renderPlot({
+    
+})
+
+shinyUI(fluidPage(
+    ## includeCSS(path="www/bootstrap.css"),
+    titlePanel(h1("Explore growth in different neighborhoods",
+                  style="font-family: 'Lobster', cursive; color: #A60628;")),
+    sidebarLayout(
+        helpText("Help me"),
+        sidebarPanel(
+            selectInput("plot", "Plot:", choices=unique(pp$PPLOT)),
+            checkboxInput("allPlots", "All plots/plot groups"),
+            conditionalPanel(
+                condition = "input.allPlots == true",
+                checkboxInput("elev", "Elevation"),
+                conditionalPanel(
+                    condition = "input.elev == true",
+                    selectInput("elevClass", "Elevation:", choices=c("L", "M", "H"))
+                ),
+                checkboxInput("aspect", "Aspect"),
+                conditionalPanel(
+                    condition = "input.aspect == true",
+                    selectInput("aspClass", "Aspect:", choices=c("E", "W"))
+                )
+            )
+
+        )
+
+    ),
+
+    mainPanel(
+        tabsetPanel(
+            id = "tabs1",
+            tabPanel("Scatter", scatter),
+            tabPanel("Residuals", resids),
+            tabPanel("Distribution", distribution)
+	)
+    )
+))
+
+```
