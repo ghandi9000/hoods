@@ -13,7 +13,8 @@ __py*
 *.html
 data
 *.zip
-
+temp
+	
 !models/www/
 !models/www/*
 !.gitignore

@@ -3,7 +3,7 @@
 ## Description: create/cache neighbor matrices/datasets
 ## Author: Noah Peart
 ## Created: Sun Apr 12 17:04:02 2015 (-0400)
-## Last-Updated: Fri Apr 17 14:21:20 2015 (-0400)
+## Last-Updated: Fri May  1 15:42:52 2015 (-0400)
 ##           By: Noah Peart
 ######################################################################
 ## source("~/work/ecodatascripts/vars/heights/canopy/load_canopy.R")
@@ -16,7 +16,7 @@ if (!file.exists("temp"))
 if (!file.exists("temp/pp.rds") |
     !file.exists("temp/tp.rds") |
     !file.exists("temp/nm1.rds")) {
-    source("remake.R")
+    source("remake.R", chdir=T)
 } else {
     pp <- readRDS("temp/pp.rds")
     tp <- readRDS("temp/tp.rds")

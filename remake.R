@@ -3,17 +3,17 @@
 ## Description: Remake datasets for analysis
 ## Author: Noah Peart
 ## Created: Mon Apr 13 20:07:47 2015 (-0400)
-## Last-Updated: Fri May  1 12:54:54 2015 (-0400)
+## Last-Updated: Fri May  1 15:43:43 2015 (-0400)
 ##           By: Noah Peart
 ######################################################################
-source("../helpers.R")
+source("./helpers.R", chdir=T)
 require(plyr)
 require(dplyr)
 
 ## Data with estimated heights/boles
-if (file.exists("temp/pp.csv") & file.exists("temp/transect.csv")) {
-    pp <- read.csv("temp/pp.csv")
-    tp <- read.csv("temp/transect.csv")
+if (file.exists("data/pp.csv") & file.exists("data/transect.csv")) {
+    pp <- read.csv("data/pp.csv")
+    tp <- read.csv("data/transect.csv")
 } else if (file.exists("../data/pp.csv")) {
     pp <- read.csv("../data/pp.csv")
     tp <- read.csv("../data/transect.csv")
@@ -76,9 +76,9 @@ saveRDS(pp, "temp/pp.rds")
 ##                                    MNM
 ##
 ################################################################################
-source("../mnm/mnm.R")
-source("../mnm/mnm-to-matrix.R")
-source('../hood_functions.R')
+source("mnm/mnm.R")
+source("mnm/mnm-to-matrix.R")
+source('hood_functions.R')
 
 ## mnm function requires "time" variable, and lowercase column names
 matDat <- pp

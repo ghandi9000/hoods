@@ -41,7 +41,9 @@ Choose parameters related to neighborhood.
 ```{r setup}
 require(ggplot2)
 require(xtable)
-source("setup.R")
+source("../setup.R", chdir=T)
+
+specs <- unique(as.character(pp$SPEC))
 
 selectInput("nrad", "Neighbor Radius:", choices=1:3)
 checkboxInput("nbrsSmaller", "Smaller (or same size) neighbors only")
@@ -50,16 +52,24 @@ conditionalPanel(
     selectInput("nbrsSmallerBy", "Smaller by:", 
                 choices=c("BA", "HT"))
 )
+checkboxInput("chooseSpec", "Choose species")
+conditionalPanel(
+    condition = "input.chooseSpec == true",
+    checkboxGroupInput("specs", "Species:", choices=specs, selected=c("ABBA", "PIRU", "BECO"),
+                       inline=TRUE)
+)
+
+
 
 nRad <- reactive({ as.numeric(input$nrad) })
 nMat <- reactive({
     rad <- nRad()
-    if (file.exists(paste0("temp/nm", rad, ".rds"))) readRDS(paste0("temp/nm", rad, ".rds"))
+    if (file.exists(paste0("../temp/nm", rad, ".rds"))) readRDS(paste0("../temp/nm", rad, ".rds"))
     else {
         nLst <- mnm(tPars = tPars, nPars = nPars, dPars = dPars, nCols = nCols,
                     nRad = rad, dat = matDat, parallel=F)
         nmat <- mnm_to_matrix(nLst)
-        saveRDS(paste0("temp/nm", rad, ".rds"))
+        saveRDS(paste0("../temp/nm", rad, ".rds"))
         nmat
     }
 })
@@ -67,9 +77,10 @@ nbrInds <- reactive({
     input$nbrsSmaller
     if (input$nbrsSmaller) {
         dep <- tolower(input$nbrsSmallerBy)
-        nmat <- nMat()
-        nmat[[dep]] >= nmat$targets[[dep]]
-    }
+        nm <- nMat()
+        nm[[dep]] >= nm$targets[[dep]]
+    } else
+        TRUE
 })
 
 ```
@@ -81,16 +92,138 @@ nbrInds <- reactive({
 ##                              Reactive Inputs
 ##
 ################################################################################
-getData <- reactive({
-    
+targInds <- reactive({
+    nm <- nMat()
+    if (input$allPlots) {
+        inds <- TRUE
+        if (input$elev)
+            inds <- nm$targets[["elevcl"]] == input$elevClass
+        if (input$aspect)
+            inds <- inds & nm$targets[["aspcl"]] == input$aspClass
+    } else
+        inds <- nm$targets[["pplot"]] == as.numeric(input$plot)
+    if (input$excludeNeg) {
+        for (i in input$excludeVars)
+            i <- tolower(i)
+            inds <- inds & !is.na(nm$targets[[i]]) & nm$targets[[i]] >= 0
+    }
+    if (input$chooseSpec)
+        inds <- inds & nm$targets[["spec"]] %in% input$specs
+    inds
 })
 
+getFit <- reactive({
+    if (input$addFit) {
+        nm <- nMat()
+        targs <- targInds()
+
+        if (input$fitType == "Linear") {
+            form <- as.formula(paste(tolower(input$yVar), "~", tolower(input$xVar)))
+            lm(form, data=nm$targets[targs,])
+        } else if (input$fitType == "Power") {
+            form <- as.formula(paste(tolower(input$yVar), "~", "a*", tolower(input$xVar), "^b"))
+            nls(form, data=nm$targets[targs,], start=list(a=as.numeric(input$a), b=as.numeric(input$b)))
+        }
+        
+    } else
+        FALSE
+})
+
+getFitData <- reactive({
+    if (input$addFit) {
+        fit <- getFit()
+        nm <- nMat()
+        targs <- targInds()
+        nbrs <- nbrInds()
+        dat <- nm$targets[targs,]
+        dat$predicted <- predict(fit, newdata=dat)
+        dat$residuals <- dat[[tolower(input$yVar)]] - dat$predicted
+        if (!input$nbrsSmaller) dat$count <- rowSums(!is.na(nm[[tolower(input$xVar)]][targs,]), na.rm=T)
+        else dat$count <- rowSums(nbrs[targs,], na.rm=T)
+        
+        if (input$resX == "Sum") {
+            x <- "nbrSum"
+            alpha <- as.numeric(input$alpha)
+            nm[[tolower(input$sumResBy)]][!nbrs] <- NA  # set neighbors smaller to NA
+            if (input$divideDist) {
+                beta <- as.numeric(input$beta)
+                nm[["distance"]][nm[["distance"]] == 0] <- as.numeric(input$distOffset)
+                dat$nbrSum <- rowSums((nm[[tolower(input$sumResBy)]][targs,])^alpha /
+                                          (nm[["distance"]][targs,])^beta, na.rm=T)
+            } else
+                dat$nbrSum <- rowSums((nm[[tolower(input$sumResBy)]][targs,])^alpha, na.rm=T)
+        }
+        dat
+    }
+})
+
+getNbrFit <- reactive({
+    if (input$nbrFit) {
+        input$beta
+        input$alpha
+        nm <- nMat()
+        targs <- targInds()
+        dat <- getFitData()
+        if (input$resX == "Neighbor Count") x <- "count"
+        else if (input$resX == "Sum") x <- "nbrSum"
+        
+        if (input$nbrFitType == "Linear") {
+            form <- as.formula(paste("residuals ~", x))
+            lm(form, data=dat)
+        } else if (input$nbrFitType == "Power") {
+            form <- as.formula(paste("residuals ~", "a*", x, "^b"))
+            nls(form, data=dat, start=list(a=as.numeric(input$a2), b=as.numeric(input$b2)))
+        }
+    } else
+        FALSE
+})
+
+################################################################################
+##
+##                                  Visuals
+##
+################################################################################
 scatter <- renderPlot({
+    nm <- nMat()
+    targs <- targInds()
+    dat <- nm$targets[targs,]
     
+    if (input$addFit) {
+        fit <- getFit()
+        dat$fitted <- predict(fit, newdata=dat)
+    }
+    
+    p1 <- ggplot(dat, aes_string(tolower(input$xVar), tolower(input$yVar))) + 
+                     geom_point(alpha=0.5) 
+    if (input$addFit) {
+        p1 <- p1 + geom_point(alpha=0.5, color="#cd5c5c", aes_string(tolower(input$xVar), "fitted"))
+    }
+    print ( p1 )
 })
 
 resids <- renderPlot({
-    
+    if (input$addFit) {
+        nm <- nMat()
+        dat <- getFitData()
+        targs <- targInds()
+        nbrs <- nbrInds()
+        x <- "predicted"
+        if (input$resX == "Sum") x <- "nbrSum"
+        else if (input$resX == "Neighbor Count") x <- "count"
+        
+        p1 <- ggplot(dat, aes_string(x, "residuals")) + geom_point(alpha=0.5)
+        
+        if (input$nbrFit) {
+            fit <- getNbrFit()
+            dat$nbrPreds <- predict(fit, newdata=dat)
+            p1 <- p1 + geom_point(data=dat, aes_string(x, "nbrPreds"), alpha=0.5, color="#cd5c5c")
+        }
+        print ( p1 )
+
+    } else {
+        plot(1, 1)
+        text(1, 1, "No model was fitted.\n-   -\n------\n", cex=4)
+    }
 })
 
 distribution <- renderPlot({
@@ -102,7 +235,6 @@ shinyUI(fluidPage(
     titlePanel(h1("Explore growth in different neighborhoods",
                   style="font-family: 'Lobster', cursive; color: #A60628;")),
     sidebarLayout(
-        helpText("Help me"),
         sidebarPanel(
             selectInput("plot", "Plot:", choices=unique(pp$PPLOT)),
             checkboxInput("allPlots", "All plots/plot groups"),
@@ -118,11 +250,63 @@ shinyUI(fluidPage(
                     condition = "input.aspect == true",
                     selectInput("aspClass", "Aspect:", choices=c("E", "W"))
                 )
+            ),
+            checkboxInput("excludeNeg", "Exclude negative growth"),
+            conditionalPanel(
+                condition = "input.excludeNeg",
+                checkboxGroupInput("excludeVars", "Exclude:", choices=c("gBA","gHT"), selected=c("gBA","gHT"))
+            ),
+            
+            ## Scatter input
+            conditionalPanel(
+                condition = "input.tabs1 == 'Scatter'",
+                selectInput("xVar", "X:", choices=c("BA", "BV", "HT", "HTOBS")),
+                selectInput("yVar", "Y:", choices=c("gBA", "gBV", "gHT", "gHTOBS")),
+                checkboxInput("addFit", "Fit model"),
+                conditionalPanel(
+                    condition = "input.addFit == true",
+                    selectInput("fitType", "Fit Type:", choices=c("Linear", "Power")),
+                    conditionalPanel(
+                        condition = "input.fitType == 'Power'",
+                        helpText("If singular gradient, adjust initial parameter values:"),
+                        textInput("a", "a", value="1"),
+                        textInput("b", "b", value="0.3")
+                    )
+                )
+            ),
+            
+            ## Residual input
+            conditionalPanel(
+                condition = "input.tabs1 == 'Residuals'",
+                selectInput("resX", "X:", choices=c("Fitted", "Neighbor Count", "Sum")),
+                conditionalPanel(
+                    condition = "input.resX == 'Sum'",
+                    selectInput("sumResBy", "Sum By:", choices=c("BA", "HT", "BV")),
+                    sliderInput("alpha", "alpha", min=0.5, max=3, value=1),
+                    checkboxInput("divideDist", "Proportional to distance"),
+                    conditionalPanel(
+                        condition = "input.divideDist",
+                        helpText("$$ \\frac{Size^\\alpha}{Distance^\\beta} $$"),
+                        sliderInput("distOffset", "Distance offset from 0", min=0.1, max=1, value=0.5),
+                        sliderInput("beta", "beta", min=0.5, max=3, value=1)
+                    )
+                ),
+                conditionalPanel(
+                    condition = "input.resX == 'Neighbor Count' || input.resX == 'Sum'",
+                    checkboxInput("nbrFit", "Fit Model"),
+                    conditionalPanel(
+                        condition = "input.nbrFit",
+                        selectInput("nbrFitType", "Fit Type:", choices=c("Linear", "Power")),
+                        conditionalPanel(
+                            condition = "input.nbrFitType == 'Power'",
+                            helpText("If singular gradient, adjust initial parameter values:"),
+                            textInput("a2", "a", value="1"),
+                            textInput("b2", "b", value="0.3")
+                        )
+                    )
+                )
             )
-
-        )
-
-    ),
+        ),
 
     mainPanel(
         tabsetPanel(
@@ -132,6 +316,51 @@ shinyUI(fluidPage(
             tabPanel("Distribution", distribution)
 	)
     )
-))
+)))
 
 ```
+
+-------
+
+# Model Summary
+
+Growth vs. prior size model:
+
+```{r growthVsSize, cache=FALSE}
+
+renderTable({
+    fit <- getFit()
+    if (!input$addFit)
+        as.table(c(0))
+    else if (input$fitType == "Linear") {
+        print(summary(fit), digits=6)
+        ## print (summary(fit)$r.squared, digits=6)
+    }
+    else if (input$fitType == "Power") {
+        print(summary(fit)$coef, digits=6)
+    }
+})
+
+
+```
+
+Residuals vs. neighborhood value:
+
+```{r residualVsHood, cache=FALSE}
+
+renderTable({
+    fit <- getNbrFit()
+    if (!input$nbrFit)
+        as.table(c(0))
+    else if (input$nbrFitType == "Linear") {
+        print(summary(fit), digits=6)
+        ## print (summary(fit)$r.squared, digits=6)
+    }
+    else if (input$nbrFitType == "Power") {
+        print(summary(fit)$coef, digits=6)
+    }
+})
+
+
+```
+
