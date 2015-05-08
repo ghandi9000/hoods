@@ -14,7 +14,8 @@ __py*
 data
 *.zip
 temp
-	
+treedata
+
 !models/www/
 !models/www/*
 !.gitignore

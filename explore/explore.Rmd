@@ -46,8 +46,8 @@ knitr::opts_chunk$set(fig.path='./Figs', echo=FALSE, warning=FALSE, message=FALS
 
 require(xtable)
 
-source("setup.R")
-source("hood_functions.R")
+source("../setup.R", chdir=T)
+source("../hood_functions.R", chdir=T)
 
 ## Total target sample size
 nbrs <- pp %>% group_by(YEAR, PPLOT) %>%
@@ -76,12 +76,12 @@ selectInput("nRad", "Choose Neighbor Radius:",
 nRad <- reactive(as.numeric(input$nRad))  # get neighbor radius from input
 nMat <- reactive({
     rad <- nRad()
-    if (file.exists(paste0("temp/nm", rad, ".rds"))) readRDS(paste0("temp/nm", rad, ".rds"))
+    if (file.exists(paste0("../temp/nm", rad, ".rds"))) readRDS(paste0("../temp/nm", rad, ".rds"))
     else {
         nLst <- mnm(tPars = tPars, nPars = nPars, dPars = dPars, nCols = nCols,
                     nRad = rad, dat = matDat, parallel=F)
         nmat <- mnm_to_matrix(nLst)
-        saveRDS(paste0("temp/nm", rad, ".rds"))
+        saveRDS(paste0("../temp/nm", rad, ".rds"))
         nmat
     }
 })

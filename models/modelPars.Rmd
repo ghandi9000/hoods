@@ -21,7 +21,7 @@ knitr::opts_chunk$set(fig.path="./Figs", echo=FALSE, warning=FALSE,
 -------
 
 # Info
-* [code](https://github.com/ghandi9000/hoods)
+* [code](https://github.com/nverno/hoods)
 
 -------
 
@@ -40,8 +40,8 @@ Model/neighborhood config
 ```{r setup}
 require(ggplot2)
 require(xtable)
-source("setup.R")
-source("hood_functions.R")
+source("../setup.R", chdir=T)
+source("../hood_functions.R", chdir=T)
 
 getModel <- reactive({
   source(paste0(input$model, "/", input$model, ".R"))
@@ -69,13 +69,13 @@ pars <- renderUI({
 nRad <- reactive(as.numeric(input$radius))  # get neighbor radius from input
 nMat <- reactive({
     rad <- nRad()
-    if (file.exists(paste0("temp/nm", rad, ".rds"))) readRDS(paste0("temp/nm", rad, ".rds"))
+    if (file.exists(paste0("../temp/nm", rad, ".rds"))) readRDS(paste0("../temp/nm", rad, ".rds"))
     else {
         nLst <- mnm(tPars = tPars, nPars = nPars, dPars = dPars, nCols = nCols,
                     nRad = rad, dat = matDat, parallel=F)
         nmat <- mnm_to_matrix(nLst)
         nmat <- addDists(nm = nmat)
-        saveRDS(nmat, paste0("temp/nm", rad, ".rds"))
+        saveRDS(nmat, paste0("../temp/nm", rad, ".rds"))
         nmat
     }
 })
