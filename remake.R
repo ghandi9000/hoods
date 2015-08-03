@@ -3,7 +3,7 @@
 ## Description: Remake datasets for analysis
 ## Author: Noah Peart
 ## Created: Mon Apr 13 20:07:47 2015 (-0400)
-## Last-Updated: Fri May  8 12:10:03 2015 (-0400)
+## Last-Updated: Mon Aug  3 14:12:06 2015 (-0400)
 ##           By: Noah Peart
 ######################################################################
 source("./helpers.R", chdir=T)
@@ -12,8 +12,8 @@ require(dplyr)
 
 ## Data with estimated heights/boles
 tryCatch({
-    pp <- read.csv("treedata/pp.csv")
-    tp <- read.csv("treedata/transect.csv")
+    pp <- read.csv("../treedata/pp.csv")
+    tp <- read.csv("../treedata/transect.csv")
 }, error=function(e) 
     stop("\n\n*** No data found -- run the update to get the data ***\n\n"))
 
